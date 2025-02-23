@@ -16,7 +16,7 @@ contract FundMe {
 
     uint256  constant MINIMUM_VALUE = 1 * 10 ** 18;
 
-    AggregatorV3Interface internal dataFeed;
+    AggregatorV3Interface public dataFeed;
 
     uint256 constant TARGET =1000 * 10 **18;
 
@@ -30,8 +30,11 @@ contract FundMe {
 
     bool public getFundSuccess = false;
 
-    constructor(uint256 _lockTime){
-        dataFeed = AggregatorV3Interface(0x694AA1769357215DE4FAC081bf1f309aDC325306);
+    event FundWithdrawByOwner(uint256);
+    event RefundByFunder(address, uint256);
+
+    constructor(uint256 _lockTime, address dataFeedAddr){
+        dataFeed = AggregatorV3Interface(dataFeedAddr);
         owner = msg.sender;
         deploymentTtimestamp = block.timestamp;
         lockTime = _lockTime;
@@ -81,10 +84,12 @@ contract FundMe {
         require(convertEthToUsd(address(this).balance) >= TARGET , "Target is not reached");
         require(block.timestamp >= deploymentTtimestamp + lockTime,"window is not closed");
         bool success;
+        uint256 balance = address(this).balance;
         (success,) = payable(msg.sender).call{value: address(this).balance}("");
         require(success,"transfer tx failed");
         fundersToAmount[msg.sender] = 0;
         getFundSuccess = true; // flag
+        emit FundWithdrawByOwner(balance);
 
     }
 
@@ -93,9 +98,11 @@ contract FundMe {
         require(fundersToAmount[msg.sender] != 0,"there is no fund for you");
         require(block.timestamp >= deploymentTtimestamp + lockTime,"window is not closed");
         bool success;
-        (success, ) = payable(msg.sender).call{value: fundersToAmount[msg.sender]}("");
+        uint256 balance = fundersToAmount[msg.sender];
+        (success, ) = payable(msg.sender).call{value: balance}("");
         require(success,"transfer tx failed");
         fundersToAmount[msg.sender] = 0;
+        emit RefundByFunder(msg.sender ,balance);
     }
 
     modifier windowClose(){
